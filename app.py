@@ -2,12 +2,30 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 import os
 import requests
+import redis
+import json
 
 load_dotenv()
 
 app = Flask(__name__)
 
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+
+redis_client = redis.Redis(
+    host="localhost",
+    port=6379,
+    db=0,
+    decode_responses=True
+)
+
+CACHE_EXPIRY_SECONDS = 60 * 60 * 2
+
+
+def is_redis_connected():
+    try:
+        return redis_client.ping()
+    except redis.RedisError:
+        return False
 
 
 @app.route("/")
@@ -17,6 +35,7 @@ def home():
     return jsonify({
         "message": "Weather API Wrapper is running",
         "weatherApiKeyConfigured": api_key_configured,
+        "redisConnected": is_redis_connected(),
         "try": "/api/weather?city=Amsterdam"
     })
 
@@ -34,6 +53,19 @@ def get_weather():
         return jsonify({
             "error": "Weather API key is missing"
         }), 500
+
+    cache_key = f"weather:{city.lower()}"
+
+    try:
+        cached_data = redis_client.get(cache_key)
+
+        if cached_data:
+            result = json.loads(cached_data)
+            result["cached"] = True
+            return jsonify(result)
+
+    except redis.RedisError:
+        pass
 
     url = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}"
 
@@ -71,6 +103,15 @@ def get_weather():
             "cached": False,
             "source": "visual-crossing"
         }
+
+        try:
+            redis_client.set(
+                cache_key,
+                json.dumps(result),
+                ex=CACHE_EXPIRY_SECONDS
+            )
+        except redis.RedisError:
+            pass
 
         return jsonify(result)
 
