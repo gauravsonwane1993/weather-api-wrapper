@@ -4,6 +4,8 @@ import os
 import requests
 import redis
 import json
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 load_dotenv()
 
@@ -16,6 +18,14 @@ redis_client = redis.Redis(
     port=6379,
     db=0,
     decode_responses=True
+)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="redis://localhost:6379",
+    headers_enabled=True
 )
 
 CACHE_EXPIRY_SECONDS = 60 * 60 * 2
@@ -36,11 +46,21 @@ def home():
         "message": "Weather API Wrapper is running",
         "weatherApiKeyConfigured": api_key_configured,
         "redisConnected": is_redis_connected(),
+        "rateLimiting": "enabled",
+        "defaultLimits": ["200 per day", "50 per hour"],
+        "weatherEndpointLimit": "10 per minute",
         "try": "/api/weather?city=Amsterdam"
     })
 
+@app.errorhandler(429)
+def ratelimit_handler(error):
+    return jsonify({
+        "error": "Rate limit exceeded",
+        "message": str(error.description)
+    }), 429
 
 @app.route("/api/weather")
+@limiter.limit("10 per minute")
 def get_weather():
     city = request.args.get("city")
 
