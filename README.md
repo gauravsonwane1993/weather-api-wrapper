@@ -1,5 +1,9 @@
 # Weather API Wrapper Service
 
+Project Reference: https://roadmap.sh/projects/weather-api-wrapper-service
+
+A backend Weather API Wrapper Service built with **Python**, **Flask**, **Redis**, and **Visual Crossing Weather API**.
+
 A backend Weather API Wrapper Service built with **Python**, **Flask**, **Redis**, and **Visual Crossing Weather API**.
 
 This project accepts a city name, fetches current weather data from an external weather API, caches the response using Redis, and applies rate limiting to protect the API from excessive requests.
